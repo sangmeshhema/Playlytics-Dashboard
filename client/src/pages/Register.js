@@ -3,16 +3,13 @@ import axios from "axios";
 import "../App.css";
 
 function Register() {
-
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
   const registerUser = async () => {
-
     try {
-
       await axios.post(
-        "http://localhost:5000/register",
+        `${process.env.REACT_APP_API_URL}/register`,
         {
           email,
           password
@@ -22,12 +19,9 @@ function Register() {
       alert("Registered Successfully ✅");
 
       window.location.href = "/";
-
     } catch (err) {
-
       console.log(err);
       alert("Registration Failed ❌");
-
     }
   };
 
