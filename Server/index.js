@@ -9,7 +9,8 @@ const axios = require("axios");
 const { google } = require("googleapis");
 const session = require("express-session");
 const passport = require("passport");
-const SteamStrategy = require("passport-steam").Strategy;
+const SteamStrategy =
+  require("passport-steam").Strategy;
 
 const User = require("./models/User");
 const Game = require("./models/Game");
@@ -17,7 +18,9 @@ const auth = require("./middleware/auth");
 
 const app = express();
 
-// ================= BASIC MIDDLEWARE =================
+// =========================================================
+// BASIC MIDDLEWARE
+// =========================================================
 
 app.use(express.json());
 
@@ -28,15 +31,26 @@ app.use(
   })
 );
 
-// ================= SESSION =================
+// =========================================================
+// SESSION
+// =========================================================
 
 app.use(
   session({
     secret: process.env.SESSION_SECRET,
     resave: false,
-    saveUninitialized: false
+    saveUninitialized: false,
+    cookie: {
+      secure: process.env.NODE_ENV === "production",
+      httpOnly: true,
+      sameSite: "lax"
+    }
   })
 );
+
+// =========================================================
+// PASSPORT
+// =========================================================
 
 app.use(passport.initialize());
 app.use(passport.session());
@@ -49,296 +63,619 @@ passport.deserializeUser((user, done) => {
   done(null, user);
 });
 
-// ================= YOUTUBE OAUTH =================
+// =========================================================
+// YOUTUBE OAUTH
+// =========================================================
 
-const oauth2Client = new google.auth.OAuth2(
-  process.env.GOOGLE_CLIENT_ID,
-  process.env.GOOGLE_CLIENT_SECRET,
-  process.env.GOOGLE_REDIRECT_URI
-);
+const oauth2Client =
+  new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    process.env.GOOGLE_REDIRECT_URI
+  );
 
-// ================= STEAM PASSPORT =================
+// =========================================================
+// STEAM PASSPORT
+// =========================================================
 
 passport.use(
   new SteamStrategy(
     {
-      returnURL: `${process.env.SERVER_URL}/auth/steam/return`,
-      realm: `${process.env.SERVER_URL}/`,
-      apiKey: process.env.STEAM_API_KEY
+      returnURL:
+        `${process.env.SERVER_URL}/auth/steam/return`,
+
+      realm:
+        `${process.env.SERVER_URL}/`,
+
+      apiKey:
+        process.env.STEAM_API_KEY
     },
+
     (identifier, profile, done) => {
-      profile.identifier = identifier;
-      return done(null, profile);
+      profile.identifier =
+        identifier;
+
+      return done(
+        null,
+        profile
+      );
     }
   )
 );
 
-// ================= STEAM LOGIN =================
+// =========================================================
+// STEAM LOGIN / CONNECT
+// =========================================================
 
 app.get(
   "/auth/steam",
+
+  (req, res, next) => {
+    const token =
+      req.query.token;
+
+    // ------------------------------------------------------
+    // NORMAL STEAM LOGIN
+    // ------------------------------------------------------
+
+    if (!token) {
+      return next();
+    }
+
+    // ------------------------------------------------------
+    // CONNECT STEAM TO EXISTING PLAYLYTICS ACCOUNT
+    // ------------------------------------------------------
+
+    try {
+      const decoded =
+        jwt.verify(
+          token,
+          process.env.JWT_SECRET
+        );
+
+      req.session.steamLinkUserId =
+        decoded.id;
+
+      next();
+
+    } catch (error) {
+      console.log(
+        "Steam link token error:",
+        error
+      );
+
+      return res
+        .status(401)
+        .send(
+          "Invalid Playlytics login ❌"
+        );
+    }
+  },
+
   passport.authenticate("steam")
 );
 
-// ================= STEAM CALLBACK =================
+// =========================================================
+// STEAM CALLBACK
+// =========================================================
 
 app.get(
   "/auth/steam/return",
+
   passport.authenticate("steam", {
-    failureRedirect: `${process.env.CLIENT_URL}/login`
+    failureRedirect: `${process.env.CLIENT_URL}/`
   }),
+
   async (req, res) => {
     try {
-      // CHECK IF STEAM USER EXISTS
-      let user = await User.findOne({
-        steamId: req.user.id
-      });
+      let user;
 
-      // CREATE NEW USER IF NOT EXISTS
-      if (!user) {
-        user = new User({
-          email: `steam_${req.user.id}@playlytics.com`,
-          password: "steamlogin",
-          steamId: req.user.id,
-          steamName: req.user.displayName,
-          steamAvatar: req.user.photos?.[2]?.value || "",
-          youtubeChannelId: "",
-          youtubeChannelName: "",
-          youtubeTokens: null
-        });
+      // =======================================================
+      // CASE 1:
+      // CONNECT STEAM TO CURRENT PLAYLYTICS USER
+      // =======================================================
 
-        await user.save();
+      if (req.session.steamLinkUserId) {
+        const currentUserId =
+          req.session.steamLinkUserId;
+
+        // -----------------------------------------------------
+        // FIND CURRENT PLAYLYTICS USER
+        // -----------------------------------------------------
+
+        user = await User.findById(currentUserId);
+
+        if (!user) {
+          delete req.session.steamLinkUserId;
+
+          return res
+            .status(404)
+            .send("Playlytics user not found ❌");
+        }
+
+        // -----------------------------------------------------
+        // FIND WHETHER STEAM ALREADY BELONGS TO ANOTHER USER
+        // -----------------------------------------------------
+
+        const existingSteamUser =
+          await User.findOne({
+            steamId: req.user.id
+          });
+
+        // =====================================================
+        // STEAM BELONGS TO ANOTHER PLAYLYTICS USER
+        // =====================================================
+
+        if (
+          existingSteamUser &&
+          existingSteamUser._id.toString() !==
+            user._id.toString()
+        ) {
+
+          console.log(
+            "Merging existing Steam account into current Playlytics account..."
+          );
+
+          // ---------------------------------------------------
+          // MOVE STEAM DATA TO CURRENT USER
+          // ---------------------------------------------------
+
+          user.steamId =
+            req.user.id;
+
+          user.steamName =
+            req.user.displayName;
+
+          user.steamAvatar =
+            req.user.photos?.[2]?.value || "";
+
+          // ---------------------------------------------------
+          // MOVE GAME RECORDS
+          // ---------------------------------------------------
+
+          await Game.updateMany(
+            {
+              userId:
+                existingSteamUser._id
+            },
+            {
+              $set: {
+                userId:
+                  user._id
+              }
+            }
+          );
+
+          // ---------------------------------------------------
+          // SAVE CURRENT USER
+          //
+          // IMPORTANT:
+          // We DO NOT touch:
+          //
+          // user.youtubeChannelId
+          // user.youtubeChannelName
+          // user.youtubeTokens
+          //
+          // Therefore existing YouTube data stays intact.
+          // ---------------------------------------------------
+
+          await user.save();
+
+          // ---------------------------------------------------
+          // DELETE DUPLICATE STEAM-ONLY USER
+          // ---------------------------------------------------
+
+          await User.deleteOne({
+            _id:
+              existingSteamUser._id
+          });
+
+          console.log(
+            "Steam account merged successfully ✅"
+          );
+        }
+
+        // =====================================================
+        // STEAM DOES NOT BELONG TO ANOTHER USER
+        // =====================================================
+
+        else {
+          user.steamId =
+            req.user.id;
+
+          user.steamName =
+            req.user.displayName;
+
+          user.steamAvatar =
+            req.user.photos?.[2]?.value || "";
+
+          await user.save();
+        }
+
+        // -----------------------------------------------------
+        // REMOVE TEMPORARY LINKING SESSION
+        // -----------------------------------------------------
+
+        delete req.session.steamLinkUserId;
       }
 
-      // CREATE JWT TOKEN
-      const token = jwt.sign(
-        {
-          id: user._id
-        },
-        process.env.JWT_SECRET,
-        {
-          expiresIn: "7d"
-        }
-      );
+      // =======================================================
+      // CASE 2:
+      // NORMAL STEAM LOGIN
+      // =======================================================
 
+      else {
+
+        user =
+          await User.findOne({
+            steamId:
+              req.user.id
+          });
+
+        // -----------------------------------------------------
+        // CREATE NEW STEAM USER
+        // -----------------------------------------------------
+
+        if (!user) {
+          user =
+            new User({
+              email:
+                `steam_${req.user.id}@playlytics.com`,
+
+              password:
+                "steamlogin",
+
+              steamId:
+                req.user.id,
+
+              steamName:
+                req.user.displayName,
+
+              steamAvatar:
+                req.user.photos?.[2]?.value ||
+                "",
+
+              youtubeChannelId:
+                "",
+
+              youtubeChannelName:
+                "",
+
+              youtubeTokens:
+                null
+            });
+
+          await user.save();
+        }
+      }
+
+      // =======================================================
+      // CREATE PLAYLYTICS JWT
+      // =======================================================
+
+      const token =
+        jwt.sign(
+          {
+            id:
+              user._id
+          },
+
+          process.env.JWT_SECRET,
+
+          {
+            expiresIn:
+              "7d"
+          }
+        );
+
+      // =======================================================
       // REDIRECT TO DASHBOARD
+      // =======================================================
+
       res.redirect(
         `${process.env.CLIENT_URL}/dashboard?token=${token}`
       );
-    } catch (error) {
-      console.log("Steam login error:", error);
 
-      res.status(500).send(
-        "Steam Login Failed ❌"
+    } catch (error) {
+
+      console.log(
+        "Steam login/link/merge error:",
+        error
       );
+
+      if (req.session) {
+        delete req.session.steamLinkUserId;
+      }
+
+      res
+        .status(500)
+        .send(
+          "Steam Login Failed ❌"
+        );
     }
   }
 );
 
-// ================= GET CURRENT USER =================
+// =========================================================
+// GET CURRENT USER
+// =========================================================
 
-app.get("/user", auth, async (req, res) => {
-  try {
-    const user = await User.findById(
-      req.user.id
-    );
+app.get(
+  "/user",
+  auth,
+  async (req, res) => {
+    try {
 
-    if (!user) {
-      return res.status(404).json({
-        message: "User not found"
-      });
-    }
-
-    res.json(user);
-  } catch (error) {
-    console.log("User route error:", error);
-
-    res.status(500).json({
-      error: "Server Error"
-    });
-  }
-});
-
-// ================= HOME =================
-
-app.get("/", (req, res) => {
-  res.send(
-    "Playlytics API Running 🚀"
-  );
-});
-
-// ================= REGISTER =================
-
-app.post("/register", async (req, res) => {
-  try {
-    const {
-      email,
-      password
-    } = req.body;
-
-    if (!email || !password) {
-      return res
-        .status(400)
-        .json(
-          "All fields required ❌"
+      const user =
+        await User.findById(
+          req.user.id
         );
-    }
 
-    const existingUser =
-      await User.findOne({
-        email
-      });
-
-    if (existingUser) {
-      return res
-        .status(400)
-        .json(
-          "User already exists ❌"
-        );
-    }
-
-    const hashedPassword =
-      await bcrypt.hash(
-        password,
-        10
-      );
-
-    const newUser = new User({
-      email,
-      password: hashedPassword
-    });
-
-    await newUser.save();
-
-    res.json(
-      "User registered successfully ✅"
-    );
-  } catch (error) {
-    console.log(
-      "Register error:",
-      error
-    );
-
-    res.status(500).json(error);
-  }
-});
-
-// ================= LOGIN =================
-
-app.post("/login", async (req, res) => {
-  try {
-    const {
-      email,
-      password
-    } = req.body;
-
-    const user =
-      await User.findOne({
-        email
-      });
-
-    if (!user) {
-      return res
-        .status(404)
-        .json(
-          "User not found ❌"
-        );
-    }
-
-    const isMatch =
-      await bcrypt.compare(
-        password,
-        user.password
-      );
-
-    if (!isMatch) {
-      return res
-        .status(400)
-        .json(
-          "Wrong password ❌"
-        );
-    }
-
-    const token = jwt.sign(
-      {
-        id: user._id
-      },
-      process.env.JWT_SECRET,
-      {
-        expiresIn: "7d"
+      if (!user) {
+        return res
+          .status(404)
+          .json({
+            message:
+              "User not found"
+          });
       }
-    );
 
-    res.json({
-      message:
-        "Login successful ✅",
-      token
-    });
-  } catch (error) {
-    console.log(
-      "Login error:",
-      error
-    );
+      res.json(user);
 
-    res.status(500).json(error);
+    } catch (error) {
+
+      console.log(
+        "User route error:",
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            "Server Error"
+        });
+    }
   }
-});
+);
 
-// ================= PROFILE =================
+// =========================================================
+// HOME
+// =========================================================
+
+app.get(
+  "/",
+  (req, res) => {
+    res.send(
+      "Playlytics API Running 🚀"
+    );
+  }
+);
+
+// =========================================================
+// REGISTER
+// =========================================================
+
+app.post(
+  "/register",
+  async (req, res) => {
+
+    try {
+
+      const {
+        email,
+        password
+      } = req.body;
+
+      if (
+        !email ||
+        !password
+      ) {
+        return res
+          .status(400)
+          .json(
+            "All fields required ❌"
+          );
+      }
+
+      const existingUser =
+        await User.findOne({
+          email
+        });
+
+      if (existingUser) {
+        return res
+          .status(400)
+          .json(
+            "User already exists ❌"
+          );
+      }
+
+      const hashedPassword =
+        await bcrypt.hash(
+          password,
+          10
+        );
+
+      const newUser =
+        new User({
+          email,
+          password:
+            hashedPassword
+        });
+
+      await newUser.save();
+
+      res.json(
+        "User registered successfully ✅"
+      );
+
+    } catch (error) {
+
+      console.log(
+        "Register error:",
+        error
+      );
+
+      res
+        .status(500)
+        .json(error);
+    }
+  }
+);
+
+// =========================================================
+// LOGIN
+// =========================================================
+
+app.post(
+  "/login",
+  async (req, res) => {
+
+    try {
+
+      const {
+        email,
+        password
+      } = req.body;
+
+      const user =
+        await User.findOne({
+          email
+        });
+
+      if (!user) {
+        return res
+          .status(404)
+          .json(
+            "User not found ❌"
+          );
+      }
+
+      const isMatch =
+        await bcrypt.compare(
+          password,
+          user.password
+        );
+
+      if (!isMatch) {
+        return res
+          .status(400)
+          .json(
+            "Wrong password ❌"
+          );
+      }
+
+      const token =
+        jwt.sign(
+          {
+            id:
+              user._id
+          },
+
+          process.env.JWT_SECRET,
+
+          {
+            expiresIn:
+              "7d"
+          }
+        );
+
+      res.json({
+        message:
+          "Login successful ✅",
+        token
+      });
+
+    } catch (error) {
+
+      console.log(
+        "Login error:",
+        error
+      );
+
+      res
+        .status(500)
+        .json(error);
+    }
+  }
+);
+
+// =========================================================
+// PROFILE
+// =========================================================
 
 app.get(
   "/profile",
   auth,
   (req, res) => {
+
     res.json({
       message:
         "Protected route ✅",
-      userId: req.user.id
+
+      userId:
+        req.user.id
     });
   }
 );
 
-// ================= ADD GAME =================
+// =========================================================
+// ADD GAME
+// =========================================================
 
 app.post(
   "/game",
   auth,
   async (req, res) => {
+
     try {
+
       const {
         game,
         hours
       } = req.body;
 
-      const newGame = new Game({
-        userId: req.user.id,
-        game,
-        hours
-      });
+      const newGame =
+        new Game({
+          userId:
+            req.user.id,
+
+          game,
+          hours
+        });
 
       await newGame.save();
 
       res.json(
         "Game added successfully ✅"
       );
+
     } catch (error) {
+
       console.log(
         "Add game error:",
         error
       );
 
-      res.status(500).json(error);
+      res
+        .status(500)
+        .json(error);
     }
   }
 );
 
-// ================= GET GAMES =================
+// =========================================================
+// GET GAMES
+// =========================================================
 
 app.get(
   "/game",
   auth,
   async (req, res) => {
+
     try {
+
       const games =
         await Game.find({
           userId:
@@ -346,121 +683,175 @@ app.get(
         });
 
       res.json(games);
+
     } catch (error) {
+
       console.log(
         "Get games error:",
         error
       );
 
-      res.status(500).json(error);
+      res
+        .status(500)
+        .json(error);
     }
   }
 );
 
-// ================= DASHBOARD =================
+// =========================================================
+// DASHBOARD API
+// =========================================================
 
 app.get(
   "/dashboard",
   auth,
   async (req, res) => {
+
     try {
+
       const games =
         await Game.find({
           userId:
             req.user.id
         });
 
-      let totalHours = 0;
+      let totalHours =
+        0;
 
-      games.forEach((game) => {
-        totalHours +=
-          Number(game.hours) || 0;
-      });
+      games.forEach(
+        (game) => {
+          totalHours +=
+            Number(
+              game.hours
+            ) || 0;
+        }
+      );
 
       res.json({
         totalGames:
           games.length,
+
         totalHours
       });
+
     } catch (error) {
+
       console.log(
         "Dashboard error:",
         error
       );
 
-      res.status(500).json(error);
+      res
+        .status(500)
+        .json(error);
     }
   }
 );
 
-// ================= YOUTUBE LOGIN =================
+// =========================================================
+// YOUTUBE LOGIN
+// =========================================================
 
 app.get(
   "/auth/youtube",
   (req, res) => {
+
     try {
+
       const token =
         req.query.token;
 
       if (!token) {
-        return res.send(
-          "No token, access denied ❌"
-        );
+        return res
+          .status(401)
+          .send(
+            "No token, access denied ❌"
+          );
       }
 
+      // Verify Playlytics JWT
+      jwt.verify(
+        token,
+        process.env.JWT_SECRET
+      );
+
       const url =
-        oauth2Client.generateAuthUrl(
-          {
-            access_type:
-              "offline",
+        oauth2Client.generateAuthUrl({
+          access_type:
+            "offline",
 
-            prompt:
-              "consent select_account",
+          prompt:
+            "consent select_account",
 
-            include_granted_scopes:
-              false,
+          include_granted_scopes:
+            false,
 
-            state: token,
+          state:
+            token,
 
-            scope: [
-              "https://www.googleapis.com/auth/youtube.readonly"
-            ]
-          }
-        );
+          scope: [
+            "https://www.googleapis.com/auth/youtube.readonly"
+          ]
+        });
 
       res.redirect(url);
+
     } catch (error) {
+
       console.log(
         "YouTube login error:",
         error
       );
 
-      res.status(500).send(
-        "YouTube Login Failed ❌"
-      );
+      res
+        .status(500)
+        .send(
+          "YouTube Login Failed ❌"
+        );
     }
   }
 );
 
-// ================= YOUTUBE CALLBACK =================
+// =========================================================
+// YOUTUBE CALLBACK
+// =========================================================
 
 app.get(
   "/auth/youtube/callback",
   async (req, res) => {
+
     try {
+
       const code =
         req.query.code;
 
       const token =
         req.query.state;
 
-      if (!code || !token) {
+      if (
+        !code ||
+        !token
+      ) {
         return res
           .status(400)
           .send(
             "Invalid YouTube callback ❌"
           );
       }
+
+      // -----------------------------------------------------
+      // VERIFY PLAYLYTICS JWT BEFORE USING IT
+      // -----------------------------------------------------
+
+      const decoded =
+        jwt.verify(
+          token,
+          process.env.JWT_SECRET
+        );
+
+      // -----------------------------------------------------
+      // EXCHANGE GOOGLE CODE FOR TOKENS
+      // -----------------------------------------------------
 
       const {
         tokens
@@ -473,35 +864,45 @@ app.get(
         tokens
       );
 
+      // -----------------------------------------------------
+      // GET YOUTUBE CHANNEL
+      // -----------------------------------------------------
+
       const youtube =
         google.youtube({
-          version: "v3",
-          auth: oauth2Client
+          version:
+            "v3",
+
+          auth:
+            oauth2Client
         });
 
       const response =
         await youtube.channels.list({
-          part: "snippet",
-          mine: true
+          part:
+            "snippet",
+
+          mine:
+            true
         });
 
       if (
         !response.data.items ||
         !response.data.items.length
       ) {
-        return res.send(
-          "No YouTube channel found ❌"
-        );
+        return res
+          .status(400)
+          .send(
+            "No YouTube channel found ❌"
+          );
       }
 
       const channel =
         response.data.items[0];
 
-      const decoded =
-        jwt.verify(
-          token,
-          process.env.JWT_SECRET
-        );
+      // -----------------------------------------------------
+      // FIND SAME PLAYLYTICS USER
+      // -----------------------------------------------------
 
       const user =
         await User.findById(
@@ -516,6 +917,10 @@ app.get(
           );
       }
 
+      // -----------------------------------------------------
+      // SAVE YOUTUBE TO SAME USER
+      // -----------------------------------------------------
+
       user.youtubeChannelId =
         channel.id;
 
@@ -527,36 +932,44 @@ app.get(
 
       await user.save();
 
-      global.youtubeAuth =
-        oauth2Client;
+      // -----------------------------------------------------
+      // REDIRECT TO DASHBOARD
+      // -----------------------------------------------------
 
       res.redirect(
         `${process.env.CLIENT_URL}/dashboard?token=${token}`
       );
+
     } catch (error) {
+
       console.log(
         "YouTube callback error:",
         error.response?.data ||
           error
       );
 
-      res.status(500).send(
-        "YouTube Connection Failed ❌"
-      );
+      res
+        .status(500)
+        .send(
+          "YouTube Connection Failed ❌"
+        );
     }
   }
 );
 
-// ================= YOUTUBE DATA =================
+// =========================================================
+// YOUTUBE DATA
+// =========================================================
 
 app.get(
   "/youtube",
   async (req, res) => {
+
     try {
+
       const token =
-        req.headers.authorization?.split(
-          " "
-        )[1];
+        req.headers.authorization
+          ?.split(" ")[1];
 
       if (!token) {
         return res
@@ -584,7 +997,7 @@ app.get(
         return res
           .status(400)
           .send(
-            "Login with YouTube first ❌"
+            "Connect YouTube first ❌"
           );
       }
 
@@ -594,14 +1007,20 @@ app.get(
 
       const youtube =
         google.youtube({
-          version: "v3",
-          auth: oauth2Client
+          version:
+            "v3",
+
+          auth:
+            oauth2Client
         });
 
       const response =
         await youtube.channels.list({
-          part: "statistics",
-          mine: true
+          part:
+            "statistics",
+
+          mine:
+            true
         });
 
       if (
@@ -629,31 +1048,47 @@ app.get(
         videos:
           stats.videoCount
       });
+
     } catch (error) {
+
       console.log(
         "YouTube data error:",
         error.response?.data ||
           error
       );
 
-      res.status(500).send(
-        "Error fetching YouTube data ❌"
-      );
+      res
+        .status(500)
+        .send(
+          "Error fetching YouTube data ❌"
+        );
     }
   }
 );
 
-// ================= STEAM API =================
+// =========================================================
+// STEAM API
+// =========================================================
 
 app.get(
   "/steam/:steamid",
   async (req, res) => {
+
     try {
+
       const steamid =
         req.params.steamid;
 
       const apiKey =
         process.env.STEAM_API_KEY;
+
+      if (!apiKey) {
+        return res
+          .status(500)
+          .send(
+            "Steam API key missing ❌"
+          );
+      }
 
       const response =
         await axios.get(
@@ -665,21 +1100,27 @@ app.get(
           .games || [];
 
       res.json(games);
+
     } catch (error) {
+
       console.log(
         "Steam API error:",
         error.response?.data ||
           error
       );
 
-      res.status(500).send(
-        "Steam API Error ❌"
-      );
+      res
+        .status(500)
+        .send(
+          "Steam API Error ❌"
+        );
     }
   }
 );
 
-// ================= DATABASE + SERVER =================
+// =========================================================
+// DATABASE + SERVER
+// =========================================================
 
 mongoose
   .connect(
@@ -689,7 +1130,9 @@ mongoose
         "playlytics"
     }
   )
+
   .then(() => {
+
     console.log(
       "MongoDB Connected ✅"
     );
@@ -701,13 +1144,16 @@ mongoose
       PORT,
       "0.0.0.0",
       () => {
+
         console.log(
           `Server running on port ${PORT}`
         );
       }
     );
   })
+
   .catch((err) => {
+
     console.error(
       "MongoDB connection failed:",
       err
