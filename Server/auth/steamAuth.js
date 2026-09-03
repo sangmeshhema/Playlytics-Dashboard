@@ -4,9 +4,9 @@ const SteamStrategy = require("passport-steam").Strategy;
 passport.use(
   new SteamStrategy(
     {
-      returnURL: "http://localhost:5000/auth/steam/return",
-      realm: "http://localhost:5000/",
-      apiKey: "6A5286DCDF4362BE0E4A6C83FC9EE9AE"
+      returnURL: `${process.env.SERVER_URL}/auth/steam/return`,
+realm: `${process.env.SERVER_URL}/`,
+      apiKey: process.env.STEAM_API_KEY,
     },
 
     function(identifier, profile, done) {
