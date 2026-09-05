@@ -1318,7 +1318,7 @@ app.get(
           req.session.save(() => resolve());
         });
       }
-
+      
       res
         .status(500)
         .send(
