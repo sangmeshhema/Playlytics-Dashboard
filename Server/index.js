@@ -1037,14 +1037,17 @@ app.post(
       req.session.youtubeLinkUserId =
         user._id.toString();
       console.log("========================================");
-      console.log("STEAM START LINK FLOW ✅");
+      console.log("YOUTUBE START LINK FLOW ✅");
       console.log("PLAYLYTICS USER ID:", req.user.id);
       console.log("SESSION ID:", req.sessionID);
       console.log(
-      "STEAM LINK USER ID:",
-      req.session.steamLinkUserId
-    );
-console.log("========================================");
+        "YOUTUBE LINK USER ID:",
+        req.session.youtubeLinkUserId
+      );
+      console.log(
+        "YOUTUBE OAUTH STATE CREATED ✅"
+      );
+      console.log("========================================");
       // -----------------------------------------------------
       // CREATE RANDOM OAUTH STATE
       // -----------------------------------------------------
