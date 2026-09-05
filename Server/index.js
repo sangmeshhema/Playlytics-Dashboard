@@ -130,89 +130,70 @@ app.post(
   "/auth/steam/start",
   authenticateToken,
   async (req, res) => {
-
     try {
-
       // -----------------------------------------------------
       // VERIFY PLAYLYTICS USER
       // -----------------------------------------------------
 
-      const user =
-        await User.findById(
-          req.user.id
-        ).select("_id");
+      const user = await User.findById(
+        req.user.id
+      ).select("_id");
 
       if (!user) {
-        return res
-          .status(404)
-          .json({
-            message:
-              "Playlytics user not found ❌"
-          });
+        return res.status(404).json({
+          message: "Playlytics user not found ❌"
+        });
       }
 
       // -----------------------------------------------------
-      // STORE USER ID IN SERVER SESSION
+      // CREATE SECURE SHORT-LIVED STEAM LINK TOKEN
       // -----------------------------------------------------
 
-      req.session.steamLinkUserId =
-        user._id.toString();
-
-      console.log("========================================");
-console.log("STEAM START LINK FLOW ✅");
-console.log(
-  "PLAYLYTICS USER ID:",
-  req.user.id
-);
-console.log(
-  "SESSION ID:",
-  req.sessionID
-);
-console.log(
-  "STEAM LINK USER ID:",
-  req.session.steamLinkUserId
-);
-console.log("========================================");
-      // -----------------------------------------------------
-      // SAVE SESSION BEFORE REDIRECT
-      // -----------------------------------------------------
-
-      await new Promise(
-        (resolve, reject) => {
-          req.session.save(
-            (error) => {
-              if (error) {
-                reject(error);
-              } else {
-                resolve();
-              }
-            }
-          );
+      const steamLinkToken = jwt.sign(
+        {
+          userId: user._id.toString(),
+          purpose: "steam_link",
+          nonce: crypto.randomBytes(32).toString("hex")
+        },
+        process.env.JWT_SECRET,
+        {
+          expiresIn: "10m"
         }
       );
 
+      console.log("========================================");
+      console.log("STEAM START LINK FLOW ✅");
+      console.log(
+        "PLAYLYTICS USER ID:",
+        user._id.toString()
+      );
+      console.log(
+        "STEAM LINK TOKEN CREATED ✅"
+      );
+      console.log("========================================");
+
       // -----------------------------------------------------
-      // RETURN CLEAN STEAM URL
+      // RETURN STEAM URL WITH SIGNED TOKEN
       // -----------------------------------------------------
 
+      const steamUrl =
+        `${process.env.SERVER_URL}/auth/steam` +
+        `?linkToken=${encodeURIComponent(steamLinkToken)}`;
+
       res.json({
-        url:
-          `${process.env.SERVER_URL}/auth/steam`
+        url: steamUrl
       });
 
     } catch (error) {
-
       console.error(
         "Steam connection start error:",
         error
       );
 
-      res
-        .status(500)
-        .json({
-          message:
-            "Unable to start Steam connection ❌"
-        });
+      res.status(500).json({
+        message:
+          "Unable to start Steam connection ❌"
+      });
     }
   }
 );
@@ -223,9 +204,39 @@ console.log("========================================");
 
 app.get(
   "/auth/steam",
-  passport.authenticate("steam", {
-    session: false
-  })
+  (req, res, next) => {
+    const linkToken =
+      req.query.linkToken;
+
+    if (!linkToken) {
+      return passport.authenticate(
+        "steam",
+        {
+          session: false
+        }
+      )(req, res, next);
+    }
+
+    // Store the token temporarily on the request.
+    req.steamLinkToken = linkToken;
+
+    next();
+  },
+
+  (req, res, next) => {
+    passport.authenticate(
+      "steam",
+      {
+        session: false,
+
+        returnURL:
+          `${process.env.SERVER_URL}/auth/steam/return` +
+          `?linkToken=${encodeURIComponent(
+            req.steamLinkToken
+          )}`
+      }
+    )(req, res, next);
+  }
 );
 
 // =========================================================
@@ -297,7 +308,8 @@ app.get(
   "/auth/steam/return",
 
   passport.authenticate("steam", {
-    failureRedirect: `${process.env.CLIENT_URL}/`,
+    failureRedirect:
+      `${process.env.CLIENT_URL}/`,
     session: false
   }),
 
@@ -305,64 +317,97 @@ app.get(
     try {
       let user;
 
-      // =======================================================
-      // CHECK WHETHER THIS IS ACCOUNT LINKING
-      // =======================================================
+      // -----------------------------------------------------
+      // GET LINK TOKEN FROM STEAM CALLBACK
+      // -----------------------------------------------------
 
-      const wasSteamLink =
-        Boolean(req.session.steamLinkUserId);
+      const linkToken =
+        req.query.linkToken;
 
-      console.log("========================================");
-      console.log(
-        "CALLBACK SESSION ID:",
-        req.sessionID
-      );
-      console.log(
-        "CALLBACK SESSION DATA:",
-        req.session
-      );
-      console.log(
-        "STEAM CALLBACK RECEIVED ✅"
-      );
-      console.log(
-        "STEAM PROFILE ID:",
-        req.user?.id || "[missing]"
-      );
-      console.log(
-        "STEAM LINK FLOW:",
-        wasSteamLink
-      );
-      console.log(
-        "STEAM LINK USER ID:",
-        req.session.steamLinkUserId || "[none]"
-      );
-      console.log("========================================");
+      let wasSteamLink = false;
+      let linkedUserId = null;
 
+      // -----------------------------------------------------
+      // VERIFY STEAM LINK TOKEN
+      // -----------------------------------------------------
 
-      // =======================================================
+      if (linkToken) {
+        try {
+          const linkData =
+            jwt.verify(
+              linkToken,
+              process.env.JWT_SECRET
+            );
+
+          if (
+            linkData &&
+            linkData.purpose === "steam_link" &&
+            linkData.userId
+          ) {
+            wasSteamLink = true;
+            linkedUserId =
+              linkData.userId;
+
+            console.log(
+              "========================================"
+            );
+
+            console.log(
+              "STEAM CALLBACK RECEIVED ✅"
+            );
+
+            console.log(
+              "STEAM LINK FLOW: true"
+            );
+
+            console.log(
+              "PLAYLYTICS USER ID:",
+              linkedUserId
+            );
+
+            console.log(
+              "STEAM PROFILE ID:",
+              req.user?.id || "[missing]"
+            );
+
+            console.log(
+              "STEAM LINK TOKEN VERIFIED ✅"
+            );
+
+            console.log(
+              "========================================"
+            );
+          }
+
+        } catch (tokenError) {
+          console.error(
+            "Steam link token verification failed:",
+            tokenError
+          );
+
+          return res
+            .status(401)
+            .send(
+              "Invalid Steam link authorization ❌"
+            );
+        }
+      }
+
+      // =====================================================
       // CASE 1 — LINK STEAM TO CURRENT PLAYLYTICS USER
-      // =======================================================
+      // =====================================================
 
-      if (wasSteamLink) {
+      if (
+        wasSteamLink &&
+        linkedUserId
+      ) {
 
-        const currentUserId =
-          req.session.steamLinkUserId;
-
-
-        // -----------------------------------------------------
-        // FIND CURRENT PLAYLYTICS USER
-        // -----------------------------------------------------
-
-        user = await User.findById(
-          currentUserId
-        );
+        user =
+          await User.findById(
+            linkedUserId
+          );
 
         if (!user) {
-
-          delete req.session.steamLinkUserId;
-
-          await req.session.save();
-
           return res
             .status(404)
             .send(
@@ -370,20 +415,19 @@ app.get(
             );
         }
 
-
-        // -----------------------------------------------------
-        // CHECK WHETHER STEAM ALREADY BELONGS TO ANOTHER USER
-        // -----------------------------------------------------
+        // ---------------------------------------------------
+        // CHECK WHETHER THIS STEAM ACCOUNT IS ALREADY LINKED
+        // ---------------------------------------------------
 
         const existingSteamUser =
           await User.findOne({
-            steamId: req.user.id
+            steamId:
+              req.user.id
           });
 
-
-        // =====================================================
-        // STEAM BELONGS TO ANOTHER PLAYLYTICS USER
-        // =====================================================
+        // ===================================================
+        // STEAM BELONGS TO ANOTHER USER
+        // ===================================================
 
         if (
           existingSteamUser &&
@@ -395,17 +439,11 @@ app.get(
             existingSteamUser.email ===
             `steam_${req.user.id}@playlytics.com`;
 
-
-          // ---------------------------------------------------
+          // -------------------------------------------------
           // DO NOT TAKE OVER A REAL ACCOUNT
-          // ---------------------------------------------------
+          // -------------------------------------------------
 
           if (!isSteamOnlyUser) {
-
-            delete req.session.steamLinkUserId;
-
-            await req.session.save();
-
             return res
               .status(409)
               .send(
@@ -413,15 +451,13 @@ app.get(
               );
           }
 
-
-          // ---------------------------------------------------
+          // -------------------------------------------------
           // MERGE STEAM-ONLY USER
-          // ---------------------------------------------------
+          // -------------------------------------------------
 
           console.log(
             "Merging Steam-only account into current Playlytics account..."
           );
-
 
           user.steamId =
             req.user.id;
@@ -431,11 +467,6 @@ app.get(
 
           user.steamAvatar =
             req.user.photos?.[2]?.value || "";
-
-
-          // ---------------------------------------------------
-          // MOVE GAME RECORDS
-          // ---------------------------------------------------
 
           await Game.updateMany(
             {
@@ -450,23 +481,12 @@ app.get(
             }
           );
 
-
-          // ---------------------------------------------------
-          // SAVE CURRENT USER
-          // ---------------------------------------------------
-
           await user.save();
-
-
-          // ---------------------------------------------------
-          // DELETE STEAM-ONLY USER
-          // ---------------------------------------------------
 
           await User.deleteOne({
             _id:
               existingSteamUser._id
           });
-
 
           console.log(
             "Steam account merged successfully ✅"
@@ -474,12 +494,11 @@ app.get(
 
         }
 
-        // =====================================================
+        // ===================================================
         // STEAM IS FREE — LINK DIRECTLY
-        // =====================================================
+        // ===================================================
 
         else {
-
           user.steamId =
             req.user.id;
 
@@ -491,82 +510,73 @@ app.get(
 
           await user.save();
 
-
           console.log(
             "Steam linked to current Playlytics user ✅"
           );
         }
 
+        // ---------------------------------------------------
+        // REDIRECT TO DASHBOARD
+        // ---------------------------------------------------
 
-        // -----------------------------------------------------
-        // REMOVE TEMPORARY LINKING SESSION
-        // -----------------------------------------------------
-
-        delete req.session.steamLinkUserId;
-
+        return res.redirect(
+          `${process.env.CLIENT_URL}/dashboard`
+        );
       }
 
-
-      // =======================================================
+      // =====================================================
       // CASE 2 — NORMAL STEAM LOGIN
-      // =======================================================
+      // =====================================================
 
-      else {
+      user =
+        await User.findOne({
+          steamId:
+            req.user.id
+        });
 
+      if (!user) {
         user =
-          await User.findOne({
+          new User({
+            email:
+              `steam_${req.user.id}@playlytics.com`,
+
+            password:
+              await bcrypt.hash(
+                crypto
+                  .randomBytes(32)
+                  .toString("hex"),
+                10
+              ),
+
             steamId:
-              req.user.id
+              req.user.id,
+
+            steamName:
+              req.user.displayName,
+
+            steamAvatar:
+              req.user.photos?.[2]?.value || "",
+
+            youtubeChannelId:
+              "",
+
+            youtubeChannelName:
+              "",
+
+            youtubeTokens:
+              null
           });
 
+        await user.save();
 
-        // -----------------------------------------------------
-        // CREATE STEAM-ONLY USER
-        // -----------------------------------------------------
-
-        if (!user) {
-
-          user =
-            new User({
-
-              email:
-                `steam_${req.user.id}@playlytics.com`,
-
-              password:
-                "steamlogin",
-
-              steamId:
-                req.user.id,
-
-              steamName:
-                req.user.displayName,
-
-              steamAvatar:
-                req.user.photos?.[2]?.value || "",
-
-              youtubeChannelId:
-                "",
-
-              youtubeChannelName:
-                "",
-
-              youtubeTokens:
-                null
-            });
-
-          await user.save();
-
-
-          console.log(
-            "New Steam-only Playlytics user created ✅"
-          );
-        }
+        console.log(
+          "New Steam-only Playlytics user created ✅"
+        );
       }
 
-
-      // =======================================================
+      // -----------------------------------------------------
       // CREATE PLAYLYTICS JWT
-      // =======================================================
+      // -----------------------------------------------------
 
       const token =
         jwt.sign(
@@ -583,53 +593,34 @@ app.get(
           }
         );
 
+      // -----------------------------------------------------
+      // STORE NORMAL STEAM LOGIN TOKEN
+      // -----------------------------------------------------
 
-      // =======================================================
-      // NORMAL STEAM LOGIN
-      // =======================================================
-
-      if (!wasSteamLink) {
-
-        req.session.steamLoginToken =
-          token;
-
-        console.log(
-          "Steam login token stored ✅"
-        );
-      }
-
-
-      // =======================================================
-      // SAVE SESSION
-      // =======================================================
+      req.session.steamLoginToken =
+        token;
 
       await new Promise(
         (resolve, reject) => {
-
           req.session.save(
             (error) => {
-
               if (error) {
                 reject(error);
               } else {
                 resolve();
               }
-
             }
           );
-
         }
       );
 
+      console.log(
+        "Steam login token stored ✅"
+      );
 
       console.log(
         "Steam callback session saved ✅"
       );
-
-
-      // =======================================================
-      // REDIRECT TO DASHBOARD
-      // =======================================================
 
       res.redirect(
         `${process.env.CLIENT_URL}/dashboard`
@@ -641,23 +632,6 @@ app.get(
         "Steam login/link/merge error:",
         error
       );
-
-
-      if (req.session) {
-
-        delete req.session.steamLinkUserId;
-
-        await new Promise(
-          (resolve) => {
-
-            req.session.save(
-              () => resolve()
-            );
-
-          }
-        );
-      }
-
 
       res
         .status(500)
