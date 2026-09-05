@@ -17,6 +17,43 @@ const Game = require("./models/Game");
 const authenticateToken = require("./middleware/auth");
 const app = express();
 app.set("trust proxy", 1);
+function getCookie(req, name) {
+  const cookieHeader = req.headers.cookie;
+
+  if (!cookieHeader) {
+    return null;
+  }
+
+  const cookies = cookieHeader
+    .split(";")
+    .map((cookie) => cookie.trim());
+
+  const prefix = `${name}=`;
+
+  const found = cookies.find((cookie) =>
+    cookie.startsWith(prefix)
+  );
+
+  if (!found) {
+    return null;
+  }
+
+  return decodeURIComponent(
+    found.substring(prefix.length)
+  );
+}
+
+const steamLinkCookieOptions = {
+  httpOnly: true,
+  secure:
+    process.env.NODE_ENV === "production",
+  sameSite:
+    process.env.NODE_ENV === "production"
+      ? "none"
+      : "lax",
+  maxAge: 10 * 60 * 1000,
+  path: "/"
+};
 // =========================================================
 // BASIC MIDDLEWARE
 // =========================================================
@@ -204,39 +241,35 @@ app.post(
 
 app.get(
   "/auth/steam",
+
   (req, res, next) => {
+
     const linkToken =
       req.query.linkToken;
 
-    if (!linkToken) {
-      return passport.authenticate(
-        "steam",
-        {
-          session: false
-        }
-      )(req, res, next);
-    }
+    // -----------------------------------------------------
+    // ACCOUNT LINKING
+    // -----------------------------------------------------
 
-    // Store the token temporarily on the request.
-    req.steamLinkToken = linkToken;
+    if (linkToken) {
+
+      res.cookie(
+        "steamLinkToken",
+        linkToken,
+        steamLinkCookieOptions
+      );
+
+      console.log(
+        "STEAM LINK COOKIE CREATED ✅"
+      );
+    }
 
     next();
   },
 
-  (req, res, next) => {
-    passport.authenticate(
-      "steam",
-      {
-        session: false,
-
-        returnURL:
-          `${process.env.SERVER_URL}/auth/steam/return` +
-          `?linkToken=${encodeURIComponent(
-            req.steamLinkToken
-          )}`
-      }
-    )(req, res, next);
-  }
+  passport.authenticate("steam", {
+    session: false
+  })
 );
 
 // =========================================================
@@ -314,39 +347,51 @@ app.get(
   }),
 
   async (req, res) => {
+
     try {
+
       let user;
 
       // -----------------------------------------------------
-      // GET LINK TOKEN FROM STEAM CALLBACK
+      // GET STEAM LINK TOKEN FROM COOKIE
       // -----------------------------------------------------
 
       const linkToken =
-        req.query.linkToken;
+        getCookie(
+          req,
+          "steamLinkToken"
+        );
 
       let wasSteamLink = false;
       let linkedUserId = null;
+
 
       // -----------------------------------------------------
       // VERIFY STEAM LINK TOKEN
       // -----------------------------------------------------
 
       if (linkToken) {
+
         try {
+
           const linkData =
             jwt.verify(
               linkToken,
               process.env.JWT_SECRET
             );
 
+
           if (
             linkData &&
-            linkData.purpose === "steam_link" &&
+            linkData.purpose ===
+              "steam_link" &&
             linkData.userId
           ) {
+
             wasSteamLink = true;
             linkedUserId =
               linkData.userId;
+
 
             console.log(
               "========================================"
@@ -367,7 +412,8 @@ app.get(
 
             console.log(
               "STEAM PROFILE ID:",
-              req.user?.id || "[missing]"
+              req.user?.id ||
+                "[missing]"
             );
 
             console.log(
@@ -380,9 +426,15 @@ app.get(
           }
 
         } catch (tokenError) {
+
           console.error(
             "Steam link token verification failed:",
             tokenError
+          );
+
+          res.clearCookie(
+            "steamLinkToken",
+            steamLinkCookieOptions
           );
 
           return res
@@ -393,8 +445,9 @@ app.get(
         }
       }
 
+
       // =====================================================
-      // CASE 1 — LINK STEAM TO CURRENT PLAYLYTICS USER
+      // CASE 1 — LINK STEAM TO CURRENT USER
       // =====================================================
 
       if (
@@ -407,7 +460,14 @@ app.get(
             linkedUserId
           );
 
+
         if (!user) {
+
+          res.clearCookie(
+            "steamLinkToken",
+            steamLinkCookieOptions
+          );
+
           return res
             .status(404)
             .send(
@@ -415,8 +475,9 @@ app.get(
             );
         }
 
+
         // ---------------------------------------------------
-        // CHECK WHETHER THIS STEAM ACCOUNT IS ALREADY LINKED
+        // CHECK EXISTING STEAM OWNER
         // ---------------------------------------------------
 
         const existingSteamUser =
@@ -424,6 +485,7 @@ app.get(
             steamId:
               req.user.id
           });
+
 
         // ===================================================
         // STEAM BELONGS TO ANOTHER USER
@@ -439,11 +501,18 @@ app.get(
             existingSteamUser.email ===
             `steam_${req.user.id}@playlytics.com`;
 
+
           // -------------------------------------------------
-          // DO NOT TAKE OVER A REAL ACCOUNT
+          // DO NOT TAKE OVER REAL ACCOUNT
           // -------------------------------------------------
 
           if (!isSteamOnlyUser) {
+
+            res.clearCookie(
+              "steamLinkToken",
+              steamLinkCookieOptions
+            );
+
             return res
               .status(409)
               .send(
@@ -451,13 +520,15 @@ app.get(
               );
           }
 
+
           // -------------------------------------------------
-          // MERGE STEAM-ONLY USER
+          // MERGE STEAM-ONLY ACCOUNT
           // -------------------------------------------------
 
           console.log(
             "Merging Steam-only account into current Playlytics account..."
           );
+
 
           user.steamId =
             req.user.id;
@@ -466,13 +537,16 @@ app.get(
             req.user.displayName;
 
           user.steamAvatar =
-            req.user.photos?.[2]?.value || "";
+            req.user.photos?.[2]?.value ||
+            "";
+
 
           await Game.updateMany(
             {
               userId:
                 existingSteamUser._id
             },
+
             {
               $set: {
                 userId:
@@ -481,12 +555,15 @@ app.get(
             }
           );
 
+
           await user.save();
+
 
           await User.deleteOne({
             _id:
               existingSteamUser._id
           });
+
 
           console.log(
             "Steam account merged successfully ✅"
@@ -495,10 +572,11 @@ app.get(
         }
 
         // ===================================================
-        // STEAM IS FREE — LINK DIRECTLY
+        // STEAM IS FREE
         // ===================================================
 
         else {
+
           user.steamId =
             req.user.id;
 
@@ -506,23 +584,38 @@ app.get(
             req.user.displayName;
 
           user.steamAvatar =
-            req.user.photos?.[2]?.value || "";
+            req.user.photos?.[2]?.value ||
+            "";
+
 
           await user.save();
+
 
           console.log(
             "Steam linked to current Playlytics user ✅"
           );
         }
 
+
         // ---------------------------------------------------
-        // REDIRECT TO DASHBOARD
+        // DELETE LINK COOKIE
+        // ---------------------------------------------------
+
+        res.clearCookie(
+          "steamLinkToken",
+          steamLinkCookieOptions
+        );
+
+
+        // ---------------------------------------------------
+        // RETURN TO DASHBOARD
         // ---------------------------------------------------
 
         return res.redirect(
           `${process.env.CLIENT_URL}/dashboard`
         );
       }
+
 
       // =====================================================
       // CASE 2 — NORMAL STEAM LOGIN
@@ -534,9 +627,16 @@ app.get(
             req.user.id
         });
 
+
+      // -----------------------------------------------------
+      // CREATE STEAM-ONLY USER
+      // -----------------------------------------------------
+
       if (!user) {
+
         user =
           new User({
+
             email:
               `steam_${req.user.id}@playlytics.com`,
 
@@ -555,7 +655,8 @@ app.get(
               req.user.displayName,
 
             steamAvatar:
-              req.user.photos?.[2]?.value || "",
+              req.user.photos?.[2]?.value ||
+              "",
 
             youtubeChannelId:
               "",
@@ -567,12 +668,15 @@ app.get(
               null
           });
 
+
         await user.save();
+
 
         console.log(
           "New Steam-only Playlytics user created ✅"
         );
       }
+
 
       // -----------------------------------------------------
       // CREATE PLAYLYTICS JWT
@@ -593,6 +697,7 @@ app.get(
           }
         );
 
+
       // -----------------------------------------------------
       // STORE NORMAL STEAM LOGIN TOKEN
       // -----------------------------------------------------
@@ -600,19 +705,25 @@ app.get(
       req.session.steamLoginToken =
         token;
 
+
       await new Promise(
         (resolve, reject) => {
+
           req.session.save(
             (error) => {
+
               if (error) {
                 reject(error);
               } else {
                 resolve();
               }
+
             }
           );
+
         }
       );
+
 
       console.log(
         "Steam login token stored ✅"
@@ -621,6 +732,11 @@ app.get(
       console.log(
         "Steam callback session saved ✅"
       );
+
+
+      // -----------------------------------------------------
+      // REDIRECT
+      // -----------------------------------------------------
 
       res.redirect(
         `${process.env.CLIENT_URL}/dashboard`
@@ -633,6 +749,7 @@ app.get(
         error
       );
 
+
       res
         .status(500)
         .send(
@@ -641,7 +758,6 @@ app.get(
     }
   }
 );
-
 // =========================================================
 // GET CURRENT USER
 // =========================================================
