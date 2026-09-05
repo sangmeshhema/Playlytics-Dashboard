@@ -23,58 +23,111 @@ function Dashboard() {
 
   useEffect(() => {
     const loadDashboard = async () => {
+
+  try {
+
+    // -----------------------------------------------------
+    // GET JWT FROM LOCAL STORAGE
+    // -----------------------------------------------------
+
+    let token =
+      localStorage.getItem("token");
+
+    // -----------------------------------------------------
+    // NORMAL STEAM LOGIN
+    // GET JWT FROM SERVER SESSION
+    // -----------------------------------------------------
+
+    if (!token) {
+
       try {
-        // -----------------------------------------------------
-        // GET JWT
-        // -----------------------------------------------------
 
-        let token =
-          localStorage.getItem("token");
-
-        // -----------------------------------------------------
-        // GET TOKEN FROM OAUTH REDIRECT
-        // -----------------------------------------------------
-
-        const params =
-          new URLSearchParams(
-            window.location.search
+        const sessionResponse =
+          await axios.post(
+            `${process.env.REACT_APP_API_URL}/auth/steam/session`,
+            {},
+            {
+              withCredentials: true
+            }
           );
 
-        const urlToken =
-          params.get("token");
+        if (
+          sessionResponse.data &&
+          sessionResponse.data.token
+        ) {
 
-        if (urlToken) {
-          token = urlToken;
+          token =
+            sessionResponse.data.token;
 
           localStorage.setItem(
             "token",
-            urlToken
+            token
           );
 
-          // Remove token from browser URL
-          window.history.replaceState(
-            {},
-            document.title,
-            "/dashboard"
+          console.log(
+            "Steam login token received ✅"
           );
         }
 
-        // -----------------------------------------------------
-        // NO TOKEN = GO TO LOGIN
-        // -----------------------------------------------------
+      } catch (sessionError) {
 
-        if (!token) {
-          window.location.href = "/";
-          return;
+        console.log(
+          "No Steam login session found:",
+          sessionError
+        );
+      }
+    }
+
+    // -----------------------------------------------------
+    // NO TOKEN = GO TO LOGIN
+    // -----------------------------------------------------
+
+    if (!token) {
+
+      window.location.href = "/";
+
+      return;
+    }
+
+    // =====================================================
+    // GET CURRENT PLAYLYTICS USER
+    // =====================================================
+
+    const userResponse =
+      await axios.get(
+        `${process.env.REACT_APP_API_URL}/user`,
+        {
+          headers: {
+            Authorization:
+              `Bearer ${token}`
+          }
         }
+      );
 
-        // =====================================================
-        // GET CURRENT PLAYLYTICS USER
-        // =====================================================
+    const user =
+      userResponse.data;
 
-        const userResponse =
+    console.log(
+      "Current Playlytics user:",
+      user
+    );
+
+    setSteamUser(user);
+
+    // =====================================================
+    // STEAM
+    // =====================================================
+
+    if (
+      user.steamId &&
+      user.steamId !== ""
+    ) {
+
+      try {
+
+        const steamResponse =
           await axios.get(
-            `${process.env.REACT_APP_API_URL}/user`,
+            `${process.env.REACT_APP_API_URL}/steam/${user.steamId}`,
             {
               headers: {
                 Authorization:
@@ -83,121 +136,113 @@ function Dashboard() {
             }
           );
 
-        const user =
-          userResponse.data;
-
         console.log(
-          "Current Playlytics user:",
-          user
+          "Steam games:",
+          steamResponse.data
         );
 
-        setSteamUser(user);
+        setSteamGames(
+          steamResponse.data || []
+        );
 
-        // =====================================================
-        // STEAM
-        // =====================================================
-
-        if (
-          user.steamId &&
-          user.steamId !== ""
-        ) {
-          try {
-            const steamResponse =
-              await axios.get(
-                `${process.env.REACT_APP_API_URL}/steam/${user.steamId}`
-              );
-
-            console.log(
-              "Steam games:",
-              steamResponse.data
-            );
-
-            setSteamGames(
-              steamResponse.data || []
-            );
-
-            setConnectedSteam(true);
-
-          } catch (error) {
-            console.log(
-              "Steam data error:",
-              error
-            );
-
-            setConnectedSteam(true);
-            setSteamGames([]);
-          }
-        } else {
-          setConnectedSteam(false);
-          setSteamGames([]);
-        }
-
-        // =====================================================
-        // YOUTUBE
-        // =====================================================
-
-        if (
-          user.youtubeChannelId &&
-          user.youtubeTokens
-        ) {
-          try {
-            const youtubeResponse =
-              await axios.get(
-                `${process.env.REACT_APP_API_URL}/youtube`,
-                {
-                  headers: {
-                    Authorization:
-                      `Bearer ${token}`
-                  }
-                }
-              );
-
-            console.log(
-              "YouTube data:",
-              youtubeResponse.data
-            );
-
-            setYoutube(
-              youtubeResponse.data
-            );
-
-            setConnectedYoutube(true);
-
-          } catch (error) {
-            console.log(
-              "YouTube data error:",
-              error
-            );
-
-            setYoutube(null);
-            setConnectedYoutube(false);
-          }
-        } else {
-          setYoutube(null);
-          setConnectedYoutube(false);
-        }
+        setConnectedSteam(true);
 
       } catch (error) {
+
         console.log(
-          "Dashboard loading error:",
+          "Steam data error:",
           error
         );
 
-        // Invalid/expired token
-        if (
-          error.response?.status === 401 ||
-          error.response?.status === 403
-        ) {
-          localStorage.removeItem(
-            "token"
+        setConnectedSteam(true);
+
+        setSteamGames([]);
+      }
+
+    } else {
+
+      setConnectedSteam(false);
+
+      setSteamGames([]);
+    }
+
+    // =====================================================
+    // YOUTUBE
+    // =====================================================
+
+    if (
+      user.youtubeChannelId
+    ) {
+
+      try {
+
+        const youtubeResponse =
+          await axios.get(
+            `${process.env.REACT_APP_API_URL}/youtube`,
+            {
+              headers: {
+                Authorization:
+                  `Bearer ${token}`
+              }
+            }
           );
 
-          window.location.href = "/";
-        }
-      }
-    };
+        console.log(
+          "YouTube data:",
+          youtubeResponse.data
+        );
 
-    loadDashboard();
+        setYoutube(
+          youtubeResponse.data
+        );
+
+        setConnectedYoutube(true);
+
+      } catch (error) {
+
+        console.log(
+          "YouTube data error:",
+          error
+        );
+
+        setYoutube(null);
+
+        setConnectedYoutube(false);
+      }
+
+    } else {
+
+      setYoutube(null);
+
+      setConnectedYoutube(false);
+    }
+
+  } catch (error) {
+
+    console.log(
+      "Dashboard loading error:",
+      error
+    );
+
+    // -----------------------------------------------------
+    // INVALID / EXPIRED TOKEN
+    // -----------------------------------------------------
+
+    if (
+      error.response?.status === 401 ||
+      error.response?.status === 403
+    ) {
+
+      localStorage.removeItem(
+        "token"
+      );
+
+      window.location.href = "/";
+    }
+  }
+};
+
+loadDashboard();
 
     // =======================================================
     // LIVE CLOCK
@@ -254,46 +299,133 @@ function Dashboard() {
       )[0];
 
   // =========================================================
-  // CONNECT STEAM
-  // =========================================================
+// CONNECT STEAM
+// =========================================================
 
-  const connectSteam = () => {
-    const token =
-      localStorage.getItem("token");
+const connectSteam = async () => {
 
-    if (!token) {
-      alert(
-        "Please login to Playlytics first ❌"
+  const token =
+    localStorage.getItem("token");
+
+  if (!token) {
+
+    alert(
+      "Please login to Playlytics first ❌"
+    );
+
+    window.location.href = "/";
+
+    return;
+  }
+
+  try {
+
+    const response =
+      await axios.post(
+        `${process.env.REACT_APP_API_URL}/auth/steam/start`,
+        {},
+        {
+          headers: {
+            Authorization:
+              `Bearer ${token}`
+          },
+
+          withCredentials:
+            true
+        }
       );
 
-      window.location.href = "/";
-      return;
+    if (
+      response.data &&
+      response.data.url
+    ) {
+
+      window.location.href =
+        response.data.url;
+
+    } else {
+
+      throw new Error(
+        "Steam login URL not received"
+      );
     }
 
-    window.location.href =
-      `${process.env.REACT_APP_API_URL}/auth/steam?token=${encodeURIComponent(token)}`;
-  };
+  } catch (error) {
 
-  // =========================================================
-  // CONNECT YOUTUBE
-  // =========================================================
+    console.error(
+      "Steam connection start error:",
+      error
+    );
 
-  const connectYouTube = () => {
-    const token =
-      localStorage.getItem("token");
+    alert(
+      "Unable to start Steam connection ❌"
+    );
+  }
+};
 
-    if (!token) {
-      alert(
-        "Please login to Playlytics first ❌"
+ // =========================================================
+// CONNECT YOUTUBE
+// =========================================================
+
+const connectYouTube = async () => {
+
+  const token =
+    localStorage.getItem("token");
+
+  if (!token) {
+
+    alert(
+      "Please login to Playlytics first ❌"
+    );
+
+    window.location.href = "/";
+
+    return;
+  }
+
+  try {
+
+    const response =
+      await axios.post(
+        `${process.env.REACT_APP_API_URL}/auth/youtube/start`,
+        {},
+        {
+          headers: {
+            Authorization:
+              `Bearer ${token}`
+          },
+
+          withCredentials: true
+        }
       );
 
-      window.location.href = "/";
-      return;
+    if (
+      response.data &&
+      response.data.url
+    ) {
+
+      window.location.href =
+        response.data.url;
+
+    } else {
+
+      throw new Error(
+        "YouTube login URL not received"
+      );
     }
 
-    window.location.href =
-      `${process.env.REACT_APP_API_URL}/auth/youtube?token=${encodeURIComponent(token)}`;
-  };
+  } catch (error) {
+
+    console.error(
+      "YouTube connection start error:",
+      error
+    );
+
+    alert(
+      "Unable to start YouTube connection ❌"
+    );
+  }
+};
 
   // =========================================================
   // LOGOUT
