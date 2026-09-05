@@ -1010,6 +1010,7 @@ app.post(
   "/auth/youtube/start",
   authenticateToken,
   async (req, res) => {
+
     try {
 
       // -----------------------------------------------------
@@ -1030,51 +1031,56 @@ app.post(
           });
       }
 
-      // -----------------------------------------------------
-      // STORE PLAYLYTICS USER IN SERVER SESSION
-      // -----------------------------------------------------
 
-      req.session.youtubeLinkUserId =
-        user._id.toString();
-      console.log("========================================");
-      console.log("YOUTUBE START LINK FLOW ✅");
-      console.log("PLAYLYTICS USER ID:", req.user.id);
-      console.log("SESSION ID:", req.sessionID);
-      console.log(
-        "YOUTUBE LINK USER ID:",
-        req.session.youtubeLinkUserId
-      );
-      console.log(
-        "YOUTUBE OAUTH STATE CREATED ✅"
-      );
-      console.log("========================================");
       // -----------------------------------------------------
-      // CREATE RANDOM OAUTH STATE
+      // CREATE SECURE SHORT-LIVED OAUTH STATE
       // -----------------------------------------------------
 
       const oauthState =
-        crypto.randomBytes(32).toString("hex");
+        jwt.sign(
+          {
+            userId:
+              user._id.toString(),
 
-      req.session.youtubeOAuthState =
-        oauthState;
+            purpose:
+              "youtube_link",
 
-      // -----------------------------------------------------
-      // SAVE SESSION BEFORE REDIRECT
-      // -----------------------------------------------------
+            nonce:
+              crypto
+                .randomBytes(32)
+                .toString("hex")
+          },
 
-      await new Promise(
-        (resolve, reject) => {
-          req.session.save(
-            (error) => {
-              if (error) {
-                reject(error);
-              } else {
-                resolve();
-              }
-            }
-          );
-        }
+          process.env.JWT_SECRET,
+
+          {
+            expiresIn:
+              "10m"
+          }
+        );
+
+
+      console.log(
+        "========================================"
       );
+
+      console.log(
+        "YOUTUBE START LINK FLOW ✅"
+      );
+
+      console.log(
+        "PLAYLYTICS USER ID:",
+        user._id.toString()
+      );
+
+      console.log(
+        "YOUTUBE OAUTH STATE CREATED ✅"
+      );
+
+      console.log(
+        "========================================"
+      );
+
 
       // -----------------------------------------------------
       // CREATE GOOGLE OAUTH URL
@@ -1099,8 +1105,9 @@ app.post(
           ]
         });
 
+
       // -----------------------------------------------------
-      // RETURN CLEAN URL
+      // RETURN GOOGLE URL
       // -----------------------------------------------------
 
       res.json({
@@ -1130,6 +1137,7 @@ app.post(
 
 app.get(
   "/auth/youtube/callback",
+
   async (req, res) => {
 
     try {
@@ -1144,10 +1152,9 @@ app.get(
       const state =
         req.query.state;
 
-      if (
-        !code ||
-        !state
-      ) {
+
+      if (!code || !state) {
+
         return res
           .status(400)
           .send(
@@ -1155,41 +1162,28 @@ app.get(
           );
       }
 
+
       // -----------------------------------------------------
-      // DEBUG YOUTUBE CALLBACK SESSION
+      // VERIFY SIGNED OAUTH STATE
       // -----------------------------------------------------
-      
-      console.log("========================================");
-      console.log("YOUTUBE CALLBACK RECEIVED ✅");
-      console.log("CALLBACK SESSION ID:", req.sessionID);
-      console.log(
-        "CALLBACK YOUTUBE LINK USER ID:",
-        req.session.youtubeLinkUserId || "[none]"
-      );
-      console.log(
-        "CALLBACK YOUTUBE OAUTH STATE:",
-        req.session.youtubeOAuthState || "[none]"
-      );
-      console.log(
-        "GOOGLE RETURNED STATE:",
-        state || "[none]"
-      );
-      
-      const youtubeStateMatches =
-        Boolean(req.session.youtubeOAuthState) &&
-        req.session.youtubeOAuthState === state;
-      
-      console.log(
-        "YOUTUBE OAUTH STATE MATCH:",
-        youtubeStateMatches
-      );
-      console.log("========================================");
-      
-      // -----------------------------------------------------
-      // VERIFY OAUTH STATE
-      // -----------------------------------------------------
-      
-      if (!youtubeStateMatches) {
+
+      let stateData;
+
+      try {
+
+        stateData =
+          jwt.verify(
+            state,
+            process.env.JWT_SECRET
+          );
+
+      } catch (stateError) {
+
+        console.error(
+          "YouTube OAuth state verification failed:",
+          stateError
+        );
+
         return res
           .status(401)
           .send(
@@ -1197,20 +1191,67 @@ app.get(
           );
       }
 
+
       // -----------------------------------------------------
-      // GET PLAYLYTICS USER ID FROM SERVER SESSION
+      // VERIFY STATE PURPOSE
       // -----------------------------------------------------
 
-      const currentUserId =
-        req.session.youtubeLinkUserId;
+      if (
+        !stateData ||
+        stateData.purpose !==
+          "youtube_link" ||
+        !stateData.userId
+      ) {
 
-      if (!currentUserId) {
         return res
           .status(401)
           .send(
-            "Playlytics session expired ❌"
+            "Invalid YouTube OAuth state ❌"
           );
       }
+
+
+      console.log(
+        "========================================"
+      );
+
+      console.log(
+        "YOUTUBE CALLBACK RECEIVED ✅"
+      );
+
+      console.log(
+        "YOUTUBE PLAYLYTICS USER ID:",
+        stateData.userId
+      );
+
+      console.log(
+        "YOUTUBE OAUTH STATE VERIFIED ✅"
+      );
+
+      console.log(
+        "========================================"
+      );
+
+
+      // -----------------------------------------------------
+      // FIND PLAYLYTICS USER
+      // -----------------------------------------------------
+
+      const user =
+        await User.findById(
+          stateData.userId
+        );
+
+
+      if (!user) {
+
+        return res
+          .status(404)
+          .send(
+            "User not found ❌"
+          );
+      }
+
 
       // -----------------------------------------------------
       // EXCHANGE GOOGLE CODE FOR TOKENS
@@ -1223,9 +1264,11 @@ app.get(
           code
         );
 
+
       oauth2Client.setCredentials(
         tokens
       );
+
 
       // -----------------------------------------------------
       // GET YOUTUBE CHANNEL
@@ -1240,6 +1283,7 @@ app.get(
             oauth2Client
         });
 
+
       const response =
         await youtube.channels.list({
           part:
@@ -1249,10 +1293,12 @@ app.get(
             true
         });
 
+
       if (
         !response.data.items ||
         !response.data.items.length
       ) {
+
         return res
           .status(400)
           .send(
@@ -1260,25 +1306,10 @@ app.get(
           );
       }
 
+
       const channel =
         response.data.items[0];
 
-      // -----------------------------------------------------
-      // FIND SAME PLAYLYTICS USER
-      // -----------------------------------------------------
-
-      const user =
-        await User.findById(
-          currentUserId
-        );
-
-      if (!user) {
-        return res
-          .status(404)
-          .send(
-            "User not found ❌"
-          );
-      }
 
       // -----------------------------------------------------
       // SAVE YOUTUBE TO SAME PLAYLYTICS USER
@@ -1293,29 +1324,14 @@ app.get(
       user.youtubeTokens =
         tokens;
 
+
       await user.save();
 
-      // -----------------------------------------------------
-      // REMOVE TEMPORARY YOUTUBE SESSION DATA
-      // -----------------------------------------------------
 
-      delete req.session.youtubeLinkUserId;
-
-      delete req.session.youtubeOAuthState;
-
-      await new Promise(
-        (resolve, reject) => {
-          req.session.save(
-            (error) => {
-              if (error) {
-                reject(error);
-              } else {
-                resolve();
-              }
-            }
-          );
-        }
+      console.log(
+        "YouTube linked to current Playlytics user ✅"
       );
+
 
       // -----------------------------------------------------
       // REDIRECT TO DASHBOARD
@@ -1327,25 +1343,12 @@ app.get(
 
     } catch (error) {
 
-      console.log(
+      console.error(
         "YouTube callback error:",
         error.response?.data ||
-          error
+        error
       );
 
-      // -----------------------------------------------------
-      // CLEAN TEMPORARY SESSION DATA
-      // -----------------------------------------------------
-
-      if (req.session) {
-        delete req.session.youtubeLinkUserId;
-        delete req.session.youtubeOAuthState;
-      
-        await new Promise((resolve) => {
-          req.session.save(() => resolve());
-        });
-      }
-      
       res
         .status(500)
         .send(
