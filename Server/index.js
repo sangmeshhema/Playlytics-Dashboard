@@ -16,7 +16,7 @@ const User = require("./models/User");
 const Game = require("./models/Game");
 const authenticateToken = require("./middleware/auth");
 const app = express();
-
+app.set("trust proxy", 1);
 // =========================================================
 // BASIC MIDDLEWARE
 // =========================================================
