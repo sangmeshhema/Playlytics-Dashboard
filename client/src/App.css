@@ -262,3 +262,1616 @@ body {
   font-size: 24px;
   font-weight: bold;
 }
+
+/* =========================================================
+   PLAYLYTICS DASHBOARD
+   RESPONSIVE LAYOUT
+   ========================================================= */
+
+.dashboard-page {
+  position: relative;
+  width: 100%;
+  min-height: 100vh;
+  overflow-x: hidden;
+  color: white;
+  box-sizing: border-box;
+}
+
+.dashboard-page *,
+.dashboard-page *::before,
+.dashboard-page *::after {
+  box-sizing: border-box;
+}
+
+.dashboard-background {
+  position: fixed;
+  inset: 0;
+  z-index: -3;
+
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+}
+
+.dashboard-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+
+  background: rgba(0, 0, 0, 0.60);
+
+  pointer-events: none;
+}
+
+
+/* =========================================================
+   SIDEBAR
+   ========================================================= */
+
+.dashboard-sidebar {
+  position: fixed;
+
+  left: 0;
+  top: 0;
+  bottom: 0;
+
+  width: 90px;
+
+  z-index: 1000;
+
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+
+  padding: 20px 14px;
+
+  background: rgba(15, 15, 15, 0.96);
+
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+
+  overflow: hidden;
+
+  transition:
+    width 0.3s ease,
+    transform 0.3s ease;
+}
+
+.dashboard-sidebar.sidebar-open {
+  width: 260px;
+}
+
+.sidebar-top {
+  width: 100%;
+}
+
+.sidebar-profile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  margin-bottom: 45px;
+}
+
+.sidebar-profile-image {
+  width: 70px;
+  height: 70px;
+
+  border-radius: 50%;
+
+  object-fit: cover;
+
+  border: 2px solid rgba(255, 255, 255, 0.15);
+
+  box-shadow:
+    0 0 20px rgba(0, 195, 255, 0.35);
+}
+
+.sidebar-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+
+  width: 100%;
+}
+
+.sidebar-menu-button,
+.sidebar-logout {
+  display: flex;
+  align-items: center;
+
+  width: 100%;
+  min-height: 58px;
+
+  padding: 14px;
+
+  gap: 16px;
+
+  border-radius: 16px;
+
+  border: 1px solid rgba(255, 255, 255, 0.08);
+
+  background: rgba(255, 255, 255, 0.04);
+
+  color: white;
+
+  font-family: Poppins, sans-serif;
+
+  font-size: 18px;
+
+  cursor: pointer;
+
+  white-space: nowrap;
+
+  overflow: hidden;
+
+  transition:
+    background 0.25s ease,
+    transform 0.25s ease;
+}
+
+.sidebar-menu-button:hover {
+  background: rgba(0, 255, 255, 0.10);
+
+  transform: translateX(4px);
+}
+
+.sidebar-menu-button span:first-child {
+  min-width: 30px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sidebar-logout {
+  justify-content: center;
+
+  border-color: rgba(255, 0, 0, 0.20);
+
+  background: rgba(255, 0, 0, 0.08);
+}
+
+.sidebar-logout:hover {
+  background: rgba(255, 0, 0, 0.14);
+}
+
+.sidebar-logout-icon {
+  font-size: 28px;
+
+  line-height: 1;
+
+  flex-shrink: 0;
+}
+
+
+/* =========================================================
+   MAIN CONTENT
+   ========================================================= */
+
+.dashboard-main {
+  position: relative;
+
+  width: calc(100% - 90px);
+
+  min-height: 100vh;
+
+  margin-left: 90px;
+
+  padding:
+    20px 20px 50px;
+
+  max-width: 1700px;
+
+  transition:
+    width 0.3s ease,
+    margin-left 0.3s ease;
+
+  z-index: 2;
+}
+
+.dashboard-main.main-sidebar-open {
+  width: calc(100% - 260px);
+
+  margin-left: 260px;
+}
+
+
+/* =========================================================
+   TITLE
+   ========================================================= */
+
+.dashboard-title {
+  margin:
+    0 0 30px;
+
+  padding:
+    0 0 0 10px;
+
+  color: white;
+
+  font-family: Orbitron, sans-serif;
+
+  font-size:
+    clamp(32px, 4vw, 52px);
+
+  line-height: 1.1;
+
+  overflow-wrap: anywhere;
+}
+
+
+/* =========================================================
+   TOP WIDGETS
+   ========================================================= */
+
+.dashboard-top-grid {
+  display: grid;
+
+  grid-template-columns:
+    minmax(0, 1fr)
+    minmax(260px, 320px);
+
+  gap: 20px;
+
+  width: 100%;
+
+  margin-bottom: 40px;
+}
+
+.dashboard-card {
+  min-width: 0;
+
+  background:
+    rgba(20, 20, 20, 0.35);
+
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+
+  border:
+    1px solid rgba(255, 255, 255, 0.08);
+
+  border-radius: 28px;
+
+  box-shadow:
+    0 0 25px rgba(0, 0, 0, 0.35);
+}
+
+.greeting-card {
+  padding: 35px;
+}
+
+.greeting-card h2 {
+  margin: 0 0 15px;
+
+  color: white;
+
+  font-family: Orbitron, sans-serif;
+
+  font-size:
+    clamp(28px, 3vw, 42px);
+
+  line-height: 1.2;
+
+  overflow-wrap: anywhere;
+}
+
+.greeting-card p {
+  margin: 0;
+
+  color:
+    rgba(255, 255, 255, 0.85);
+
+  font-family: Poppins, sans-serif;
+
+  font-size:
+    clamp(16px, 1.5vw, 22px);
+
+  line-height: 1.6;
+
+  overflow-wrap: anywhere;
+}
+
+.clock-card {
+  display: flex;
+
+  flex-direction: column;
+
+  align-items: center;
+
+  justify-content: center;
+
+  text-align: center;
+
+  padding: 30px;
+}
+
+.clock-label {
+  margin: 0 0 15px;
+
+  color: #00c3ff;
+
+  font-family: Orbitron, sans-serif;
+
+  font-size: 18px;
+
+  letter-spacing: 2px;
+}
+
+.clock-time {
+  margin: 0 0 15px;
+
+  color: white;
+
+  font-family: Orbitron, sans-serif;
+
+  font-size:
+    clamp(34px, 4vw, 52px);
+
+  line-height: 1;
+}
+
+.clock-date {
+  margin: 0;
+
+  color:
+    rgba(255, 255, 255, 0.80);
+
+  font-family: Poppins, sans-serif;
+
+  font-size:
+    clamp(16px, 1.5vw, 20px);
+}
+
+
+/* =========================================================
+   CONNECTION BUTTONS
+   ========================================================= */
+
+.connection-section {
+  display: flex;
+
+  flex-wrap: wrap;
+
+  align-items: center;
+
+  gap: 14px;
+
+  width: 100%;
+
+  margin-bottom: 50px;
+}
+
+.connection-button,
+.connection-status,
+.change-youtube-button {
+  min-height: 58px;
+
+  border-radius: 15px;
+
+  padding:
+    12px 24px;
+
+  font-family: Orbitron, sans-serif;
+
+  font-size:
+    clamp(14px, 1.5vw, 20px);
+
+  line-height: 1.2;
+
+  display: inline-flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+  gap: 12px;
+
+  text-align: center;
+
+  white-space: normal;
+
+  overflow-wrap: anywhere;
+}
+
+.connection-button {
+  border:
+    1px solid rgba(255, 255, 255, 0.10);
+
+  background:
+    rgba(255, 255, 255, 0.05);
+
+  color: white;
+
+  cursor: pointer;
+
+  transition:
+    transform 0.25s ease,
+    background 0.25s ease;
+}
+
+.connection-button:hover {
+  transform: translateY(-3px);
+
+  background:
+    rgba(255, 255, 255, 0.09);
+}
+
+.connection-status {
+  color: white;
+
+  border:
+    1px solid #00ff99;
+
+  background:
+    rgba(0, 255, 150, 0.10);
+}
+
+.steam-status {
+  border-color: #00ff99;
+}
+
+.youtube-status {
+  border-color: #00ff99;
+}
+
+.connection-icon {
+  width: 34px;
+  height: 34px;
+
+  flex-shrink: 0;
+
+  object-fit: contain;
+}
+
+.steam-icon {
+  border-radius: 50%;
+}
+
+.youtube-icon,
+.youtube-heading-icon {
+  display: inline-flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+  flex-shrink: 0;
+
+  background: #ff0000;
+
+  color: white;
+}
+
+.youtube-icon {
+  width: 30px;
+  height: 22px;
+
+  border-radius: 7px;
+
+  font-size: 14px;
+}
+
+.youtube-connect-wrapper {
+  display: flex;
+
+  max-width: 100%;
+}
+
+.youtube-controls {
+  display: flex;
+
+  flex-wrap: wrap;
+
+  align-items: center;
+
+  gap: 12px;
+
+  max-width: 100%;
+}
+
+.change-youtube-button {
+  border:
+    1px solid rgba(255, 255, 255, 0.10);
+
+  background:
+    rgba(255, 255, 255, 0.05);
+
+  color: white;
+
+  cursor: pointer;
+
+  transition:
+    transform 0.25s ease,
+    background 0.25s ease;
+}
+
+.change-youtube-button:hover {
+  transform: translateY(-3px);
+
+  background:
+    rgba(255, 255, 255, 0.09);
+}
+
+
+/* =========================================================
+   COMMON SECTION
+   ========================================================= */
+
+.dashboard-section {
+  width: 100%;
+
+  min-width: 0;
+
+  margin-bottom: 45px;
+
+  padding: 35px;
+
+  background:
+    rgba(20, 20, 20, 0.35);
+
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+
+  border:
+    1px solid rgba(255, 255, 255, 0.08);
+
+  border-radius: 30px;
+
+  box-shadow:
+    0 0 30px rgba(0, 0, 0, 0.35);
+}
+
+.section-heading {
+  display: flex;
+
+  align-items: center;
+
+  gap: 15px;
+
+  min-width: 0;
+
+  margin-bottom: 35px;
+}
+
+.section-heading-icon {
+  width: 55px;
+  height: 55px;
+
+  flex-shrink: 0;
+
+  object-fit: contain;
+
+  filter:
+    drop-shadow(
+      0 0 8px
+      rgba(255, 255, 255, 0.5)
+    );
+}
+
+.section-heading h2 {
+  margin: 0;
+
+  min-width: 0;
+
+  color: white;
+
+  font-family: Orbitron, sans-serif;
+
+  font-size:
+    clamp(26px, 3vw, 42px);
+
+  line-height: 1.15;
+
+  overflow-wrap: anywhere;
+}
+
+.section-emoji {
+  width: 55px;
+  height: 55px;
+
+  display: inline-flex;
+
+  align-items: center;
+  justify-content: center;
+
+  flex-shrink: 0;
+
+  font-size: 40px;
+}
+
+.youtube-heading-icon {
+  width: 55px;
+  height: 38px;
+
+  border-radius: 9px;
+
+  font-size: 20px;
+
+  box-shadow:
+    0 0 10px
+    rgba(255, 0, 0, 0.45);
+}
+
+.empty-message {
+  margin: 0;
+
+  color:
+    rgba(255, 255, 255, 0.75);
+
+  font-family: Poppins, sans-serif;
+
+  font-size:
+    clamp(15px, 1.5vw, 20px);
+
+  line-height: 1.6;
+
+  overflow-wrap: anywhere;
+}
+
+
+/* =========================================================
+   MY GAMES
+   ========================================================= */
+
+.games-grid {
+  display: grid;
+
+  grid-template-columns:
+    repeat(
+      auto-fit,
+      minmax(220px, 1fr)
+    );
+
+  gap: 22px;
+
+  width: 100%;
+}
+
+.game-card {
+  position: relative;
+
+  width: 100%;
+
+  min-width: 0;
+
+  aspect-ratio: 300 / 190;
+
+  overflow: hidden;
+
+  border-radius: 25px;
+
+  cursor: pointer;
+
+  color: white;
+
+  box-shadow:
+    0 0 25px
+    rgba(0, 0, 0, 0.5);
+
+  transition:
+    transform 0.35s ease,
+    box-shadow 0.35s ease;
+}
+
+.game-card:hover {
+  transform:
+    translateY(-8px)
+    scale(1.015);
+
+  box-shadow:
+    0 0 35px
+    rgba(0, 195, 255, 0.35);
+}
+
+.game-card-image {
+  position: absolute;
+
+  inset: 0;
+
+  width: 100%;
+  height: 100%;
+
+  object-fit: cover;
+}
+
+.game-card-overlay {
+  position: absolute;
+
+  inset: 0;
+
+  background:
+    rgba(0, 0, 0, 0.45);
+
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+
+.game-card-content {
+  position: relative;
+
+  z-index: 2;
+
+  height: 100%;
+
+  display: flex;
+
+  flex-direction: column;
+
+  justify-content: space-between;
+
+  padding: 20px;
+}
+
+.game-card-content h3 {
+  margin: 0;
+
+  color: white;
+
+  font-family: Orbitron, sans-serif;
+
+  font-size:
+    clamp(16px, 1.8vw, 22px);
+
+  line-height: 1.3;
+
+  text-shadow:
+    0 0 10px black;
+
+  overflow-wrap: anywhere;
+}
+
+.game-card-content p {
+  margin: 0;
+
+  color: #00c3ff;
+
+  font-family: Poppins, sans-serif;
+
+  font-size:
+    clamp(18px, 1.8vw, 22px);
+
+  font-weight: bold;
+
+  text-shadow:
+    0 0 15px black;
+}
+
+
+/* =========================================================
+   ACTIVITY
+   ========================================================= */
+
+.activity-grid {
+  display: grid;
+
+  grid-template-columns:
+    repeat(
+      auto-fit,
+      minmax(220px, 300px)
+    );
+
+  gap: 30px;
+
+  width: 100%;
+}
+
+.activity-item {
+  width: 100%;
+
+  min-width: 0;
+}
+
+.activity-label {
+  margin: 0 0 18px;
+
+  font-family: Orbitron, sans-serif;
+
+  font-size:
+    clamp(19px, 2vw, 26px);
+
+  line-height: 1.2;
+
+  overflow-wrap: anywhere;
+}
+
+.recent-label {
+  color: #00c3ff;
+}
+
+.top-label {
+  color: #00ff99;
+}
+
+.activity-card {
+  position: relative;
+
+  width: 100%;
+
+  aspect-ratio: 300 / 190;
+
+  overflow: hidden;
+
+  border-radius: 25px;
+
+  color: white;
+
+  box-shadow:
+    0 0 25px
+    rgba(0, 0, 0, 0.5);
+}
+
+.activity-card-image {
+  position: absolute;
+
+  inset: 0;
+
+  width: 100%;
+  height: 100%;
+
+  object-fit: cover;
+}
+
+.activity-card-overlay {
+  position: absolute;
+
+  inset: 0;
+
+  background:
+    rgba(0, 0, 0, 0.45);
+
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+
+.activity-card-content {
+  position: relative;
+
+  z-index: 2;
+
+  height: 100%;
+
+  display: flex;
+
+  flex-direction: column;
+
+  justify-content: space-between;
+
+  padding: 20px;
+}
+
+.activity-card-content h4 {
+  margin: 0;
+
+  color: white;
+
+  font-family: Orbitron, sans-serif;
+
+  font-size:
+    clamp(17px, 1.8vw, 22px);
+
+  line-height: 1.3;
+
+  text-shadow:
+    0 0 10px black;
+
+  overflow-wrap: anywhere;
+}
+
+.activity-card-content p {
+  margin: 0;
+
+  color:
+    rgba(255, 255, 255, 0.80);
+
+  font-family: Poppins, sans-serif;
+
+  font-size:
+    clamp(12px, 1.2vw, 14px);
+
+  line-height: 1.4;
+
+  overflow-wrap: anywhere;
+}
+
+
+/* =========================================================
+   YOUTUBE ANALYTICS
+   ========================================================= */
+
+.youtube-stats {
+  display: grid;
+
+  grid-template-columns:
+    repeat(3, minmax(0, 1fr));
+
+  gap: 30px;
+
+  width: 100%;
+
+  padding: 20px;
+
+  text-align: center;
+}
+
+.youtube-stat {
+  min-width: 0;
+}
+
+.youtube-stat h3 {
+  margin: 0 0 10px;
+
+  font-family: Orbitron, sans-serif;
+
+  font-size:
+    clamp(18px, 2.5vw, 40px);
+
+  line-height: 1.15;
+
+  overflow-wrap: anywhere;
+}
+
+.youtube-stat p {
+  margin: 0;
+
+  color: white;
+
+  font-family: Poppins, sans-serif;
+
+  font-size:
+    clamp(24px, 2.2vw, 35px);
+
+  font-weight: bold;
+}
+
+.youtube-stat-subs {
+  color: #ff3b3b;
+}
+
+.youtube-stat-views {
+  color: #00c3ff;
+}
+
+.youtube-stat-videos {
+  color: #00ff99;
+}
+
+.milestone-wrapper {
+  width: 100%;
+
+  margin-top: 50px;
+}
+
+.milestone-wrapper > h2 {
+  margin: 0 0 20px;
+
+  color: white;
+
+  font-family: Orbitron, sans-serif;
+
+  font-size:
+    clamp(25px, 3vw, 45px);
+
+  line-height: 1.2;
+}
+
+.milestone-card {
+  width: min(420px, 100%);
+
+  padding: 30px;
+
+  border-radius: 22px;
+
+  background:
+    rgba(255, 255, 255, 0.03);
+
+  border:
+    1px solid rgba(255, 255, 255, 0.06);
+}
+
+.milestone-card h3 {
+  margin: 0 0 25px;
+
+  color: white;
+
+  font-family: Poppins, sans-serif;
+
+  font-size:
+    clamp(20px, 2.2vw, 30px);
+
+  line-height: 1.3;
+
+  overflow-wrap: anywhere;
+}
+
+.progress-track {
+  width: 100%;
+
+  height: 22px;
+
+  margin-bottom: 18px;
+
+  background:
+    rgba(255, 255, 255, 0.15);
+
+  border-radius: 20px;
+
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+
+  border-radius: inherit;
+
+  background:
+    linear-gradient(
+      to right,
+      #ff0000,
+      #ff4d4d
+    );
+
+  transition:
+    width 0.5s ease;
+}
+
+.milestone-card p {
+  margin: 0;
+
+  color: white;
+
+  font-family: Poppins, sans-serif;
+
+  font-size:
+    clamp(16px, 1.5vw, 22px);
+
+  line-height: 1.4;
+}
+
+
+/* =========================================================
+   FOOTER
+   ========================================================= */
+
+.dashboard-footer {
+  display: flex;
+
+  align-items: center;
+
+  justify-content: space-between;
+
+  flex-wrap: wrap;
+
+  gap: 25px;
+
+  width: 100%;
+
+  margin-top: 70px;
+
+  padding:
+    35px 20px;
+
+  border-top:
+    1px solid
+    rgba(255, 255, 255, 0.10);
+}
+
+.footer-brand {
+  min-width: 0;
+}
+
+.footer-brand h2 {
+  margin: 0 0 10px;
+
+  color: white;
+
+  font-family: Orbitron, sans-serif;
+
+  font-size:
+    clamp(22px, 2vw, 28px);
+}
+
+.footer-brand p {
+  margin: 0;
+
+  color:
+    rgba(255, 255, 255, 0.70);
+
+  font-family: Poppins, sans-serif;
+
+  font-size:
+    clamp(14px, 1.3vw, 18px);
+
+  line-height: 1.5;
+
+  overflow-wrap: anywhere;
+}
+
+.footer-links {
+  display: flex;
+
+  align-items: center;
+
+  gap: 20px;
+
+  flex-wrap: wrap;
+}
+
+.footer-links a {
+  display: inline-flex;
+
+  align-items: center;
+
+  justify-content: center;
+}
+
+.footer-links img {
+  width: 42px;
+  height: 42px;
+
+  object-fit: contain;
+}
+
+
+/* =========================================================
+   TABLET
+   ========================================================= */
+
+@media (max-width: 900px) {
+
+  .dashboard-main {
+    width: calc(100% - 80px);
+
+    margin-left: 80px;
+
+    padding:
+      18px 15px 40px;
+  }
+
+  .dashboard-main.main-sidebar-open {
+    width: calc(100% - 80px);
+
+    margin-left: 80px;
+  }
+
+  .dashboard-sidebar {
+    width: 80px;
+  }
+
+  .dashboard-sidebar.sidebar-open {
+    width: 80px;
+  }
+
+  .dashboard-top-grid {
+    grid-template-columns:
+      1fr;
+  }
+
+  .clock-card {
+    min-height: 220px;
+  }
+
+  .games-grid {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+
+  .activity-grid {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+
+  .youtube-stats {
+    grid-template-columns:
+      repeat(3, minmax(0, 1fr));
+
+    gap: 15px;
+  }
+}
+
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (max-width: 700px) {
+
+  html,
+  body,
+  #root {
+    width: 100%;
+    max-width: 100%;
+
+    overflow-x: hidden;
+  }
+
+  .dashboard-background {
+    background-attachment: scroll;
+  }
+
+  .dashboard-sidebar,
+  .dashboard-sidebar.sidebar-open,
+  .dashboard-sidebar.sidebar-closed {
+    width: 64px;
+
+    padding:
+      14px 8px;
+  }
+
+  .sidebar-profile {
+    margin-bottom: 28px;
+  }
+
+  .sidebar-profile-image {
+    width: 48px;
+    height: 48px;
+  }
+
+  .sidebar-menu {
+    gap: 10px;
+  }
+
+  .sidebar-menu-button,
+  .sidebar-logout {
+    min-height: 52px;
+
+    padding: 10px;
+
+    justify-content: center;
+
+    gap: 0;
+
+    border-radius: 14px;
+  }
+
+  .sidebar-menu-button:hover {
+    transform: none;
+  }
+
+  .sidebar-menu-button span:first-child {
+    min-width: 26px;
+  }
+
+  .sidebar-logout-icon {
+    font-size: 24px;
+  }
+
+  .dashboard-main,
+  .dashboard-main.main-sidebar-open,
+  .dashboard-main.main-sidebar-closed {
+    width: calc(100% - 64px);
+
+    margin-left: 64px;
+
+    padding:
+      14px 10px 35px;
+  }
+
+  .dashboard-title {
+    margin-bottom: 22px;
+
+    padding-left: 0;
+
+    font-size:
+      clamp(24px, 7vw, 34px);
+
+    line-height: 1.05;
+  }
+
+  .dashboard-top-grid {
+    grid-template-columns: 1fr;
+
+    gap: 14px;
+
+    margin-bottom: 25px;
+  }
+
+  .greeting-card {
+    padding: 22px 18px;
+  }
+
+  .greeting-card h2 {
+    font-size:
+      clamp(22px, 6vw, 30px);
+
+    line-height: 1.2;
+  }
+
+  .greeting-card p {
+    font-size: 15px;
+
+    line-height: 1.6;
+  }
+
+  .clock-card {
+    min-height: 190px;
+
+    padding: 22px 14px;
+  }
+
+  .clock-label {
+    font-size: 14px;
+
+    letter-spacing: 1.5px;
+  }
+
+  .clock-time {
+    font-size:
+      clamp(30px, 9vw, 42px);
+  }
+
+  .clock-date {
+    font-size: 15px;
+  }
+
+  .connection-section {
+    flex-direction: column;
+
+    align-items: stretch;
+
+    gap: 10px;
+
+    margin-bottom: 30px;
+  }
+
+  .connection-button,
+  .connection-status,
+  .change-youtube-button {
+    width: 100%;
+
+    min-height: 54px;
+
+    padding:
+      12px 15px;
+
+    font-size: 13px;
+  }
+
+  .youtube-connect-wrapper {
+    width: 100%;
+  }
+
+  .youtube-controls {
+    width: 100%;
+
+    flex-direction: column;
+
+    align-items: stretch;
+  }
+
+  .dashboard-section {
+    margin-bottom: 25px;
+
+    padding: 20px 14px;
+
+    border-radius: 22px;
+  }
+
+  .section-heading {
+    gap: 10px;
+
+    margin-bottom: 22px;
+  }
+
+  .section-heading-icon {
+    width: 38px;
+    height: 38px;
+  }
+
+  .section-heading h2 {
+    font-size:
+      clamp(20px, 6vw, 30px);
+  }
+
+  .section-emoji {
+    width: 38px;
+    height: 38px;
+
+    font-size: 27px;
+  }
+
+  .youtube-heading-icon {
+    width: 38px;
+    height: 28px;
+
+    border-radius: 7px;
+
+    font-size: 14px;
+  }
+
+  .games-grid {
+    grid-template-columns: 1fr;
+
+    gap: 14px;
+  }
+
+  .game-card {
+    aspect-ratio: 16 / 9;
+  }
+
+  .game-card-content {
+    padding: 16px;
+  }
+
+  .game-card-content h3 {
+    font-size: 17px;
+  }
+
+  .game-card-content p {
+    font-size: 17px;
+  }
+
+  .activity-grid {
+    grid-template-columns: 1fr;
+
+    gap: 22px;
+  }
+
+  .activity-item {
+    width: 100%;
+  }
+
+  .activity-label {
+    margin-bottom: 12px;
+
+    font-size: 20px;
+  }
+
+  .activity-card {
+    aspect-ratio: 16 / 9;
+  }
+
+  .youtube-stats {
+    grid-template-columns: 1fr;
+
+    gap: 18px;
+
+    padding: 0;
+  }
+
+  .youtube-stat {
+    padding:
+      12px;
+
+    border-radius: 16px;
+
+    background:
+      rgba(255, 255, 255, 0.03);
+  }
+
+  .youtube-stat h3 {
+    font-size: 19px;
+  }
+
+  .youtube-stat p {
+    font-size: 28px;
+  }
+
+  .milestone-wrapper {
+    margin-top: 30px;
+  }
+
+  .milestone-wrapper > h2 {
+    font-size: 26px;
+  }
+
+  .milestone-card {
+    width: 100%;
+
+    padding: 20px 16px;
+  }
+
+  .milestone-card h3 {
+    font-size: 21px;
+  }
+
+  .progress-track {
+    height: 18px;
+  }
+
+  .milestone-card p {
+    font-size: 16px;
+  }
+
+  .dashboard-footer {
+    margin-top: 35px;
+
+    padding:
+      25px 8px;
+
+    flex-direction: column;
+
+    align-items: flex-start;
+  }
+
+  .footer-links {
+    width: 100%;
+
+    justify-content: center;
+  }
+
+  .footer-links img {
+    width: 36px;
+    height: 36px;
+  }
+}
+
+
+/* =========================================================
+   VERY SMALL PHONES
+   ========================================================= */
+
+@media (max-width: 400px) {
+
+  .dashboard-sidebar,
+  .dashboard-sidebar.sidebar-open,
+  .dashboard-sidebar.sidebar-closed {
+    width: 58px;
+  }
+
+  .dashboard-main,
+  .dashboard-main.main-sidebar-open,
+  .dashboard-main.main-sidebar-closed {
+    width: calc(100% - 58px);
+
+    margin-left: 58px;
+
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .sidebar-profile-image {
+    width: 44px;
+    height: 44px;
+  }
+
+  .dashboard-title {
+    font-size: 23px;
+  }
+
+  .greeting-card {
+    padding: 18px 14px;
+  }
+
+  .greeting-card h2 {
+    font-size: 21px;
+  }
+
+  .greeting-card p {
+    font-size: 14px;
+  }
+
+  .connection-button,
+  .connection-status,
+  .change-youtube-button {
+    font-size: 12px;
+  }
+
+  .dashboard-section {
+    padding:
+      18px 12px;
+  }
+}
+
+
+/* =========================================================
+   REDUCED MOTION
+   ========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+
+  .dashboard-page *,
+  .dashboard-page *::before,
+  .dashboard-page *::after {
+    scroll-behavior: auto !important;
+
+    transition-duration: 0.01ms !important;
+
+    animation-duration: 0.01ms !important;
+
+    animation-iteration-count: 1 !important;
+  }
+}
