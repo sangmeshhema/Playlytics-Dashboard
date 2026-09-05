@@ -1156,13 +1156,40 @@ app.get(
       }
 
       // -----------------------------------------------------
+      // DEBUG YOUTUBE CALLBACK SESSION
+      // -----------------------------------------------------
+      
+      console.log("========================================");
+      console.log("YOUTUBE CALLBACK RECEIVED ✅");
+      console.log("CALLBACK SESSION ID:", req.sessionID);
+      console.log(
+        "CALLBACK YOUTUBE LINK USER ID:",
+        req.session.youtubeLinkUserId || "[none]"
+      );
+      console.log(
+        "CALLBACK YOUTUBE OAUTH STATE:",
+        req.session.youtubeOAuthState || "[none]"
+      );
+      console.log(
+        "GOOGLE RETURNED STATE:",
+        state || "[none]"
+      );
+      
+      const youtubeStateMatches =
+        Boolean(req.session.youtubeOAuthState) &&
+        req.session.youtubeOAuthState === state;
+      
+      console.log(
+        "YOUTUBE OAUTH STATE MATCH:",
+        youtubeStateMatches
+      );
+      console.log("========================================");
+      
+      // -----------------------------------------------------
       // VERIFY OAUTH STATE
       // -----------------------------------------------------
-
-      if (
-        !req.session.youtubeOAuthState ||
-        req.session.youtubeOAuthState !== state
-      ) {
+      
+      if (!youtubeStateMatches) {
         return res
           .status(401)
           .send(
