@@ -11,9 +11,7 @@ const { google } = require("googleapis");
 const session = require("express-session");
 const MongoStore = require("connect-mongo").default;
 const passport = require("passport");
-const SteamStrategy =
-  require("passport-steam").Strategy;
-
+const SteamStrategy = require("passport-steam").Strategy;
 const User = require("./models/User");
 const Game = require("./models/Game");
 const authenticateToken = require("./middleware/auth");
