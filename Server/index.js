@@ -1313,6 +1313,10 @@ app.get(
       if (req.session) {
         delete req.session.youtubeLinkUserId;
         delete req.session.youtubeOAuthState;
+      
+        await new Promise((resolve) => {
+          req.session.save(() => resolve());
+        });
       }
 
       res
